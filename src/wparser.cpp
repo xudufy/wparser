@@ -30,11 +30,6 @@ void oBufferStream::openBuffer(Buffer b) {
 }
 
 using namespace wasm;
-using Byte = uint8_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-using s32 = int32_t;
-using s64 = int64_t;
 
 void parseLength(base_node* base_node, int start_offset, oBufferStream & source, bool skip = false) {
     auto start_pos = source.cur_pos;
@@ -48,37 +43,133 @@ void parseLength(base_node* base_node, int start_offset, oBufferStream & source,
     }
 }
 
-std::shared_ptr<base_node> parseNameSec(oBufferStream & source) {
-    source.consumeByte(); // section id 0
+std::string parseName(oBufferStream & source) {
+    u32 nameLength = source.consumeUInt();
+    return source.consumeBuffer(nameLength);
+}
+
+void parseVec(oBufferStream & source, std::function<void(oBufferStream &)> func_foreach) {
+    u32 vecLength = source.consumeUInt();
+    for (size_t i = 0; i < vecLength; i++) {
+        func_foreach(source);
+    }
+}
+
+std::shared_ptr<base_node> parseNameSec(oBufferStream & source, size_t extent_end) {
     auto namesec = std::make_shared<namesec_t>();
-    parseLength(namesec.get(), -1, source, false);
-    
+    //name already parsed in parseCustomSec
+    while (source.cur_pos < extent_end) {
+        u32 subsec_id = source.consumeByte();
+        if (subsec_id == 0) {
+            auto subsec = std::make_shared<modulenamesubsec_t>();
+            parseLength(subsec.get(), -1, source, false);
+            subsec->name = parseName(source);
+            namesec->modulenamesubsec = subsec;
+        } else if (subsec_id == 1) {
+            auto subsec = std::make_shared<funcnamesubsec_t>();
+            parseLength(subsec.get(), -1, source, false);
+            parseVec(source, [&subsec](oBufferStream & source) {
+                u32 idx = source.consumeUInt();
+                std::string name = parseName(source);
+                subsec->namemap[idx] = name;
+            });
+            namesec->funcnamesubsec = subsec;
+        } else if (subsec_id == 2) {
+            auto subsec = std::make_shared<localnamesubsec_t>();
+            parseLength(subsec.get(), -1, source, false);
+            parseVec(source, [&](oBufferStream & source) {
+                u32 funcidx = source.consumeUInt();
+                auto func_entry = subsec->indirectnamemap[funcidx] = {};
+                parseVec(source, [&](oBufferStream & source){
+                    u32 idx = source.consumeUInt();
+                    std::string name = parseName(source);
+                    func_entry[idx] = name;
+                });
+            });
+            namesec->localnamesubsec = subsec;
+        }
+    }
+    return namesec;
 }
 
 std::shared_ptr<base_node> parseCustomSec(oBufferStream & source) {
     auto customsec = std::make_shared<customsec_t>();
     parseLength(customsec.get(), -1, source, false);
     auto nameLength = source.consumeUInt();
-    for (u64 i = 0; i < nameLength; i++) {
-        customsec->name += source.consumeByte();
-    }
+    customsec->name = source.consumeBuffer(nameLength);
     if (customsec->name == "name") {
-        auto namesec = parseNameSec(source);
+        auto namesec = parseNameSec(source, customsec->extent.end);
+        namesec->extent = customsec->extent;
+        namesec->extent_without_size = customsec->extent_without_size;
         customsec->namesec = std::static_pointer_cast<namesec_t>(namesec);
     }
     source.cur_pos = customsec->extent.end;
     return customsec;
 }
 
+limits_t parseLimits(oBufferStream & source) {
+    limits_t l;
+    l.limitsType = source.consumeByte();
+    l.min_ = source.consumeUInt();
+    if (l.limitsType == 0x01) {
+        l.max_ = source.consumeUInt();
+    }
+    return l;
+}
+
 std::shared_ptr<base_node> parseTypeSec(oBufferStream & source) {
     auto typesec = std::make_shared<typesec_t>();
     parseLength(typesec.get(), -1, source, true);
     return typesec;
-}
+} 
+
 
 std::shared_ptr<base_node> parseImportSec(oBufferStream & source) {
     auto importsec = std::make_shared<importsec_t>();
-    parseLength(importsec.get(), -1, source, true);
+    parseLength(importsec.get(), -1, source, false);
+    parseVec(source, [&](oBufferStream & source) {
+        auto mod = parseName(source);
+        auto nm = parseName(source);
+        auto importdesctype = source.consumeByte();
+        switch (importdesctype) {
+            case 0x00: {
+                importdesc::func f;
+                f.nm = std::move(nm);
+                f.mod = std::move(mod);
+                f.typeidx = source.consumeUInt();
+                importsec->funcs.emplace_back(std::move(f));
+                break;
+            }
+            case 0x01: {
+                importdesc::table t;
+                t.nm = std::move(nm);
+                t.mod = std::move(mod);
+                t.reftype = source.consumeSInt();
+                t.lim = parseLimits(source);
+                importsec->tables.emplace_back(std::move(t));
+                break;
+            }
+            case 0x02: {
+                importdesc::mem m;
+                m.nm = std::move(nm);
+                m.mod = std::move(mod);
+                m.lim = parseLimits(source);
+                importsec->mems.emplace_back(std::move(m));
+                break;
+            }
+            case 0x03: {
+                importdesc::global g;
+                g.nm = std::move(nm);
+                g.mod = std::move(mod);
+                g.valtype = source.consumeSInt();
+                g.mut = source.consumeByte();
+                importsec->globals.emplace_back(std::move(g));
+                break;
+            }
+            default: 
+                throw std::runtime_error("bad importdesctype" + std::to_string(importdesctype));
+        };
+    });
     return importsec;
 }
 
@@ -210,9 +301,8 @@ std::shared_ptr<module_t> parse(std::string wasm_path){
     oBufferStream source;
     source.openFile(wasm_path);
     
-    uint8_t opening[8];
-    source.consumeBuffer(opening, 8);
-    if (memcmp(opening, wasmOpening, 8) != 0){
+    std::string opening = source.consumeBuffer(8);
+    if (memcmp(opening.data(), wasmOpening, 8) != 0){
         goto err;
     }
 

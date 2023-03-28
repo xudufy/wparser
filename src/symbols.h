@@ -23,9 +23,46 @@ class typesec_t: public base_node {
 public:
     typesec_t():base_node("typesec"){}
 };
+
+struct limits_t{
+    byte limitsType;
+    u32 min_;
+    u32 max_;
+};
+
+struct importdesc{
+    struct base{
+        std::string mod;
+        std::string nm;
+    };
+
+    struct func: public base {
+        u32 typeidx;
+    };
+
+    struct table: public base {
+        s32 reftype;
+        limits_t lim;
+    };
+
+    struct mem: public base {
+        limits_t lim;
+    };
+
+    struct global: public base {
+        s32 valtype;
+        byte mut;
+    };
+
+};
+
 class importsec_t: public base_node {
 public:
-    importsec_t():base_node("importsec"){}
+    importsec_t():base_node("importsec"){}    
+    std::vector<importdesc::func> funcs;
+    std::vector<importdesc::table> tables;
+    std::vector<importdesc::mem> mems;
+    std::vector<importdesc::global> globals;
 };
 class funcsec_t: public base_node {
 public:
@@ -59,9 +96,31 @@ class datacountsec_t: public base_node {
 public:
     datacountsec_t():base_node("datacountsec"){}
 };
+
+class modulenamesubsec_t : public base_node {
+public:
+    modulenamesubsec_t():base_node("modulenamesubsec"){}
+    std::string name;
+};
+
+class funcnamesubsec_t : public base_node {
+public:
+    funcnamesubsec_t():base_node("funcnamesubsec"){}
+    std::unordered_map<u32, std::string> namemap;
+};
+
+class localnamesubsec_t : public base_node {
+public:
+    localnamesubsec_t():base_node("localnamesubsec"){}
+    std::unordered_map<u32, std::unordered_map<u32, std::string>> indirectnamemap;
+};
+
 class namesec_t: public base_node {
 public:
     namesec_t():base_node("namesec"){}
+    std::shared_ptr<modulenamesubsec_t> modulenamesubsec = nullptr;
+    std::shared_ptr<funcnamesubsec_t> funcnamesubsec = nullptr;
+    std::shared_ptr<localnamesubsec_t> localnamesubsec = nullptr;
 };
 
 class expr_t : public base_node {

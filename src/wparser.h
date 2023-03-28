@@ -72,9 +72,11 @@ public:
         return buffer[cur_pos++];
     }
 
-    void consumeBuffer(uint8_t* buf, size_t size) {
-        memcpy(buf, buffer + cur_pos, size);
+    Buffer consumeBuffer(size_t size) {
+        Buffer b;
+        b.assign((char *)buffer + cur_pos, size);
         cur_pos += size;
+        return b;
     }
 };
 
