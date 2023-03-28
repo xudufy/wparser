@@ -1,0 +1,12 @@
+{
+"astSymbolClassTemplate": {
+    "prefix": "astsymbolclass",
+    "body": [
+        "class $1_t : public base_node {",
+        "public:",
+        "    $1_t():base_node(\"$1\"){}",
+        "};"
+    ],
+    "description": "AST Symbol Class"
+}
+}
