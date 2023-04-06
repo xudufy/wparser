@@ -111,8 +111,11 @@ limits_t parseLimits(oBufferStream & source) {
     limits_t l;
     l.limitsType = source.consumeByte();
     l.min_ = source.consumeUInt();
-    if (l.limitsType == 0x01) {
+    if (l.limitsType == 0x01 || l.limitsType == 0x03) {
         l.max_ = source.consumeUInt();
+    }
+    if (l.limitsType == 0x02 || l.limitsType == 0x03) {
+        l.sharedFlag = 1;
     }
     return l;
 }
@@ -233,9 +236,9 @@ std::shared_ptr<base_node> parseCodeSec(oBufferStream & source) {
             func->locals.push_back(local);
         }
         auto expr = std::make_shared<expr_t>();
-        //TODO: parse expr;
         expr->extent.start = source.cur_pos;
         expr->extent.end = func->extent.end;
+        //TODO: parse expr;
         func->expr = expr;
         source.cur_pos = func->extent.end;
         codesec->func.push_back(func);
@@ -256,7 +259,15 @@ std::shared_ptr<base_node> parseDataCountSec(oBufferStream & source) {
 }
 
 void postProcessIdx(module_t *module) {
-    //TODO: populate funcidx.
+    u32 importFuncCount = 0;
+    for (auto & importsec: module->importsec) {
+        importFuncCount += importsec->funcs.size();
+    }
+    for (auto & codesec: module->codesec) {
+        for (auto & func: codesec->func) {
+            func->funcidx = importFuncCount++;
+        }
+    }
 } 
 
 std::shared_ptr<module_t> parseModule(oBufferStream & source) {
@@ -264,9 +275,9 @@ std::shared_ptr<module_t> parseModule(oBufferStream & source) {
     modu->extent.start = 0;
     modu->extent.end = source.buffer_size;
     while (!source.eof()) {
-        auto sectionId = (WasmSection)source.consumeByte();
+        auto sectionId = (WasmSectionEnum)source.consumeByte();
 #define PARSE_CHILDREN_SNIPPET(CAMELCASE, LOWERCASE) \
-            if (sectionId == WasmSection::CAMELCASE) { \
+            if (sectionId == WasmSectionEnum::CAMELCASE) { \
             auto child = parse##CAMELCASE##Sec(source); \
             modu->children.push_back(child); \
             modu->LOWERCASE##sec.push_back(std::static_pointer_cast<LOWERCASE##sec_t>(child));} 

@@ -18,6 +18,12 @@ public:
     const char *kind;
     extent_t extent;
     extent_t extent_without_size;
+    inline std::string toString() {
+        return "extent: " + std::to_string(extent.start)
+        + " " + std::to_string(extent.end)
+        + " " + std::to_string(extent_without_size.start)
+        + " " + std::to_string(extent_without_size.end);
+    }
 };
 class typesec_t: public base_node {
 public:
@@ -28,6 +34,7 @@ struct limits_t{
     byte limitsType;
     u32 min_;
     u32 max_;
+    byte sharedFlag = 0;
 };
 
 struct importdesc{
@@ -131,7 +138,7 @@ public:
 enum class valtype_t: int8_t {i32 = -1, i64=-2, f32=-3, f64 = -4, v128=-5, funcref=-16, externref=-17,
 functype=-32, resulttype=-64};
 
-enum class WasmSection: uint8_t {
+enum class WasmSectionEnum: uint8_t {
     Custom,
     Type,
     Import,

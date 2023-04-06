@@ -6,9 +6,9 @@ int main(int argc, char*argv[]) {
     }
 
     auto mod = wparser::parse(argv[1]);
-    W_LOG("%zu", mod->extent.end);
+    W_LOG("module size: %zu", mod->extent.end);
     for (size_t i = 0; i < mod->children.size(); i++) {
-        W_LOG("%s %zu", mod->children[i]->kind, mod->children[i]->extent.end);
+        W_LOG("%s 0x%zx", mod->children[i]->kind, mod->children[i]->extent.end);
     }
 
     return 0;
