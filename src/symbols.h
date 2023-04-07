@@ -130,9 +130,13 @@ public:
     std::shared_ptr<localnamesubsec_t> localnamesubsec = nullptr;
 };
 
+class func_t;
+
 class expr_t : public base_node {
 public:
     expr_t():base_node("expr"){}
+    
+    func_t* parentFunc;
 };
 
 enum class valtype_t: int8_t {i32 = -1, i64=-2, f32=-3, f64 = -4, v128=-5, funcref=-16, externref=-17,
@@ -158,7 +162,7 @@ class locals_t : public base_node {
 public:
     locals_t():base_node("locals"){}
 
-    int repeat;
+    u32 repeat;
     valtype_t valtype;
 };
 

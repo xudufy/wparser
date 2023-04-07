@@ -3,6 +3,37 @@
 
 namespace wparser {
 
+Buffer openFile(std::string path) {
+    auto fp = fopen(path.c_str(), "rb");
+    if (!fp) {
+        throw std::runtime_error("bad file");
+    }
+    if (fseek(fp, 0, SEEK_END)) {
+        throw std::runtime_error("bad file");
+    }
+    auto buffer_size = ftell(fp);
+    auto buffer = (uint8_t*)malloc(buffer_size);
+    rewind(fp);
+    auto ret = fread(buffer, 1, buffer_size, fp);
+    if ((u32)ret != (u32)buffer_size) {
+        throw std::runtime_error("bad file");
+    }
+    fclose(fp);
+    std::string buf;
+    buf.assign((char *)buffer, buffer_size);
+    return buf;
+}
+
+void writeFile(std::string path, Buffer buf) {
+    auto fp = fopen(path.c_str(), "wb");
+    if (!fp) {
+        throw std::runtime_error("bad file");
+    }
+    auto ret = fwrite(buf.data(), 1, buf.size(), fp);
+    if (ret != buf.size()) {
+        throw std::runtime_error("bad file");
+    }
+}
 
 void oBufferStream::openFile(std::string path) {
     auto fp = fopen(path.c_str(), "rb");
@@ -238,6 +269,8 @@ std::shared_ptr<base_node> parseCodeSec(oBufferStream & source) {
         auto expr = std::make_shared<expr_t>();
         expr->extent.start = source.cur_pos;
         expr->extent.end = func->extent.end;
+        expr->extent_without_size = expr->extent;
+        expr->parentFunc = func.get();
         //TODO: parse expr;
         func->expr = expr;
         source.cur_pos = func->extent.end;
@@ -274,8 +307,13 @@ std::shared_ptr<module_t> parseModule(oBufferStream & source) {
     auto modu = std::make_shared<module_t>();
     modu->extent.start = 0;
     modu->extent.end = source.buffer_size;
+    modu->extent_without_size = modu->extent;
     while (!source.eof()) {
         auto sectionId = (WasmSectionEnum)source.consumeByte();
+        W_LOGVAR(source.buffer_size);
+        W_LOGVAR(source.cur_pos);
+        W_LOGVAR((int)sectionId);
+        W_LOG("curpos 0x%zx", source.cur_pos);
 #define PARSE_CHILDREN_SNIPPET(CAMELCASE, LOWERCASE) \
             if (sectionId == WasmSectionEnum::CAMELCASE) { \
             auto child = parse##CAMELCASE##Sec(source); \

@@ -5,8 +5,6 @@
 
 namespace wparser{
 
-typedef std::string Buffer;
-
 class oBufferStream {
 protected:
     uint8_t* buffer = nullptr;
@@ -80,15 +78,7 @@ public:
     }
 };
 
+Buffer openFile(std::string wasm_path);
 std::shared_ptr<wasm::module_t> parse(std::string wasm_path);
-
-class CodegenModifierBase {
-    Buffer modifyModule(wasm::module_t * modu, Buffer in) {return in;}
-};
-
-class Codegen {
-    Buffer encodeModule(wasm::base_node node);
-    CodegenModifierBase modifier; 
-};
-
+void writeFile(std::string path, Buffer buf);
 }
