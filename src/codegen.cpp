@@ -1,5 +1,5 @@
 #include "codegen.h"
-#include "utils/LEB128.h"
+#include "LEB128.h"
 
 namespace wparser {
     using namespace wasm;

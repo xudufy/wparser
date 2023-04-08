@@ -1,5 +1,4 @@
 #include "../src/wparser.h"
-#include "../src/codegen.h"
 
 int main(int argc, char*argv[]) {
     if (argc < 2) {

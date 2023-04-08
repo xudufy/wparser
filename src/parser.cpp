@@ -1,4 +1,4 @@
-#include "wparser.h"
+#include "parser.h"
 #include <iostream>
 
 namespace wparser {
@@ -291,17 +291,36 @@ std::shared_ptr<base_node> parseDataCountSec(oBufferStream & source) {
     return datacountsec;
 }
 
-void postProcessIdx(module_t *module) {
+void postProcessIdx(module_t *module_) {
     u32 importFuncCount = 0;
-    for (auto & importsec: module->importsec) {
+    for (auto & importsec: module_->importsec) {
         importFuncCount += importsec->funcs.size();
     }
-    for (auto & codesec: module->codesec) {
+    for (auto & codesec: module_->codesec) {
         for (auto & func: codesec->func) {
             func->funcidx = importFuncCount++;
         }
     }
-} 
+}
+
+void postProcessFuncName(module_t *module_) {
+    std::unordered_map<u32, std::string> funcNameMap;
+    for (auto & custom : module_->customsec) {
+        if (custom->namesec != nullptr) {
+            auto namesec = custom->namesec;
+            if (namesec->funcnamesubsec) {
+                funcNameMap.merge(namesec->funcnamesubsec->namemap);
+            }
+        }
+    }
+    for (auto & codesec: module_->codesec) {
+        for (auto & func: codesec->func) {
+            if (funcNameMap.count(func->funcidx) == 1) {
+                func->debuginfo_name = funcNameMap[func->funcidx];
+            }
+        }
+    }
+}
 
 std::shared_ptr<module_t> parseModule(oBufferStream & source) {
     auto modu = std::make_shared<module_t>();
@@ -310,10 +329,6 @@ std::shared_ptr<module_t> parseModule(oBufferStream & source) {
     modu->extent_without_size = modu->extent;
     while (!source.eof()) {
         auto sectionId = (WasmSectionEnum)source.consumeByte();
-        W_LOGVAR(source.buffer_size);
-        W_LOGVAR(source.cur_pos);
-        W_LOGVAR((int)sectionId);
-        W_LOG("curpos 0x%zx", source.cur_pos);
 #define PARSE_CHILDREN_SNIPPET(CAMELCASE, LOWERCASE) \
             if (sectionId == WasmSectionEnum::CAMELCASE) { \
             auto child = parse##CAMELCASE##Sec(source); \
@@ -340,7 +355,7 @@ std::shared_ptr<module_t> parseModule(oBufferStream & source) {
         }
     }
     postProcessIdx(modu.get());
-    
+    postProcessFuncName(modu.get());
     return modu;
 }
 

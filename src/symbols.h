@@ -173,6 +173,7 @@ public:
 
     std::shared_ptr<expr_t> expr;
     uint32_t funcidx;
+    std::string debuginfo_name; // extracted from namesection. May be empty.
     std::vector<std::shared_ptr<locals_t>> locals;
 };
 
